@@ -1,0 +1,81 @@
+version: '3'
+
+networks:
+  vpcbr:
+    driver: bridge
+    ipam:
+     config:
+       - subnet: 10.5.0.0/24
+
+services:
+  redis:
+    image: docker.io/bitnami/redis:6.2
+    environment:
+      # ALLOW_EMPTY_PASSWORD is recommended only for development.
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_DISABLE_COMMANDS=FLUSHDB,FLUSHALL
+    #ports:
+    #  - '6379:6379'
+    expose:
+      - "6379"
+    volumes:
+      - 'redis_data:/bitnami/redis/data'
+    networks:
+      vpcbr:
+        ipv4_address: 10.5.0.2
+  asgard-bivrost:
+    build:
+      context: $GOPATH/src/asgard-bivrost
+      dockerfile: $GOPATH/src/asgard-bivrost/Dockerfile
+    image: asgard-bivrost
+    working_dir: /app
+    environment:
+     - APP_REGISTRY_ADDR=redis:6379
+     - APP_REGISTRY_PASSWORD=
+     - APP_PORT=9000
+    networks:
+      vpcbr:
+        ipv4_address: 10.5.0.3
+    depends_on:
+      - "redis"
+  bivrost-task2:
+    build:
+       context: .
+       dockerfile: Dockerfile
+       args:
+         GITHUB_USERNAME: alvin-koinworks
+         GITHUB_ACCESS_TOKEN: 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
+    image: bivrost-task2
+    working_dir: /app
+    environment:
+      - REDIS_ADDR=${REDIS_ADDR}
+    networks:
+      vpcbr :        
+        ipv4_address: 10.5.0.4
+    depends_on:
+      - "redis"
+      - "asgard-bivrost"
+      - "postgres"
+  postgres:
+    image: postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB_NAME: orderDB
+    expose:
+      - "5432"
+    networks:
+      vpcbr:
+        ipv4_address: 10.5.0.5
+  pgadmin:
+    container_name: pgadmin_container
+    image: dpage/pgadmin4
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    ports:
+      - "5050:80"
+volumes:
+  redis_data:
+    driver: local
